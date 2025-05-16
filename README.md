@@ -1,4 +1,4 @@
-# DeformStudio 🎨
+# DeformStudio
 
 DeformStudio is a web-based 2D image deformation tool built entirely with vanilla HTML, CSS, and JavaScript. It allows you to load an image, draw various shapes (rectangles, ellipses, polygons) on it, and then deform these shapes using a physics-based mesh. You can apply different material properties to simulate effects like jelly, cloth, or rubber.
 
