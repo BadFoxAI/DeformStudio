@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeformStudio</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            font-family: sans-serif;
+            display: flex;
+            background-color: #333;
+            color: #eee;
+        }
+
+        .toolbar-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #393939;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+            position: relative;
+        }
+
+        .toolbar-container.right {
+            box-shadow: -2px 0 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .toolbar-content {
+            width: 280px;
+            min-width: 240px;
+            height: 100%;
+            background-color: #444;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease, opacity 0.2s ease .1s;
+        }
+
+        .toolbar-container.collapsed .toolbar-content {
+            width: 0;
+            min-width: 0;
+            padding: 15px 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease, opacity 0.1s ease;
+        }
+
+        .toolbar-toggle {
+            background-color: #0af;
+            color: white;
+            border: none;
+            padding: 8px 5px;
+            cursor: pointer;
+            font-size: 1.2em;
+            line-height: 1;
+            position: absolute;
+            top: 10px;
+            z-index: 15;
+            border-radius: 0 4px 4px 0;
+            box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+            width: 28px;
+            text-align: center;
+        }
+
+        .toolbar-container.left .toolbar-toggle {
+            right: -28px;
+        }
+
+        .toolbar-container.right .toolbar-toggle {
+            left: -28px;
+            border-radius: 4px 0 0 4px;
+        }
+
+        .toolbar h3 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: #0af;
+            border-bottom: 1px solid #555;
+            padding-bottom: 4px;
+        }
+
+        .toolbar button,
+        .toolbar select,
+        .toolbar input[type="file"],
+        .toolbar input[type="range"] {
+            width: 100%;
+            padding: 6px;
+            margin-bottom: 6px;
+            box-sizing: border-box;
+            background-color: #555;
+            color: #eee;
+            border: 1px solid #666;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .toolbar input[type="range"] {
+            padding: 0;
+        }
+
+        .toolbar input[type="file"] {
+            padding: 5px;
+        }
+
+        .toolbar button {
+            cursor: pointer;
+            background-color: #0af;
+            color: #fff;
+            font-weight: bold;
+            border-color: #08d;
+        }
+
+        .toolbar button.active {
+            background-color: #06a;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .toolbar button:hover {
+            background-color: #08d;
+        }
+
+        .toolbar button:disabled {
+            background-color: #777;
+            color: #aaa;
+            cursor: not-allowed;
+            border-color: #666;
+        }
+
+        .toolbar label {
+            display: block;
+            margin-bottom: 2px;
+            font-size: 0.9em;
+        }
+
+        .toolbar .control-group p {
+            font-size: 0.8em;
+            color: #ccc;
+            line-height: 1.2;
+            margin-top: 2px;
+            margin-bottom: 5px;
+        }
+
+        .toolbar .slider-value {
+            font-size: 0.85em;
+            color: #ddd;
+            display: inline-block;
+            margin-left: 5px;
+        }
+
+        .toolbar hr {
+            border-color: #555;
+            margin: 4px 0;
+        }
+
+        .advanced-settings {
+            border: 1px solid #555;
+            padding: 8px;
+            margin-top: 6px;
+            border-radius: 4px;
+            background-color: #3a3a3a;
+        }
+
+        .advanced-settings.hidden {
+            display: none;
+        }
+
+        .canvas-area {
+            flex-grow: 1;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #282828;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #imageCanvas {
+            border: 1px solid #555;
+            max-width: 100%;
+            max-height: 100%;
+            cursor: default;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="toolbar-container left" id="leftToolbarContainer"><button class="toolbar-toggle" id="toggleLeftToolbar">«</button>
+        <div class="toolbar toolbar-content" id="leftToolbar">
+            <div class="control-group">
+                <h3>File</h3><input type="file" id="imageLoader" accept="image/*"><button id="btnReset">Reset All</button>
+            </div>
+            <div class="control-group">
+                <h3>Tools</h3><button id="toolSelect" class="active">Select/Edit</button><button id="toolDeformMode">Deform Mode</button>
+                <hr><button id="toolDrawRect">Draw Rectangle</button><button id="toolDrawEllipse">Draw Ellipse</button><button id="toolDrawPolygon">Draw Polygon</button>
+                <hr><button id="toolGenerateEffect">Generate/Apply Effect</button>
+            </div>
+            <div class="control-group">
+                <h3>Edit</h3><button id="btnUndo" disabled>Undo</button><button id="btnRedo" disabled>Redo</button>
+                <hr><button id="btnCut" disabled>Cut</button><button id="btnCopy" disabled>Copy</button><button id="btnPaste" disabled>Paste</button>
+                <hr><button id="btnClearShapes">Clear All Shapes</button><button id="btnDeleteSelected" style="background-color:#c44;" disabled>Delete Selected</button>
+            </div>
+        </div>
+    </div>
+    <div class="canvas-area"><canvas id="imageCanvas"></canvas></div>
+    <div class="toolbar-container right" id="rightToolbarContainer"><button class="toolbar-toggle" id="toggleRightToolbar">»</button>
+        <div class="toolbar toolbar-content" id="rightToolbar">
+            <div class="control-group">
+                <h3>Material Properties</h3><label for="materialPreset">Preset:</label><select id="materialPreset" style="margin-bottom:5px;">
+                    <option value="custom">Custom</option>
+                    <option value="jelly_firm">Jelly (Firm)</option>
+                    <option value="jelly_medium" selected>Jelly (Medium)</option>
+                    <option value="jelly_loose">Jelly (Loose)</option>
+                    <option value="cloth_light">Cloth (Light)</option>
+                    <option value="cloth_heavy">Cloth (Heavy)</option>
+                    <option value="rubber_band">Rubber Band</option>
+                    <option value="slime">Slime</option>
+                    <option value="water_surface">Water Surface</option>
+                </select><button id="btnToggleAdvanced" style="font-size:0.8em; padding:5px; background-color:#666;">Advanced Settings</button>
+                <div id="advancedSettingsContainer" class="advanced-settings hidden"><label for="stiffness">Origin Stiffness: <span id="stiffnessValue">0.2</span></label><input type="range" id="stiffness" min="0.01" max="2.5" step="0.01" value="0.2"><label for="adjacentStiffness">Adj. Stiffness: <span id="adjacentStiffnessValue">0.5</span></label><input type="range" id="adjacentStiffness" min="0.01" max="5.0" step="0.01" value="0.5"><label for="damping">Damping: <span id="dampingValue">0.07</span></label><input type="range" id="damping" min="0.001" max="1.0" step="0.001" value="0.07"></div>
+            </div>
+            <div class="control-group">
+                <h3>Simulation & Detail</h3><label for="timeScale">Time Scale: <span id="timeScaleValue">1.0</span></label><input type="range" id="timeScale" min="0.1" max="3" step="0.05" value="1.0"><label for="meshDensity">Mesh Density: <span id="meshDensityValue">10</span></label><input type="range" id="meshDensity" min="3" max="40" step="1" value="10">
+                <p style="font-size:0.75em;">Affects new shapes.</p>
+            </div>
+            <div class="control-group">
+                <h3>View</h3>
+                <p style="font-size:0.8em">Wheel: Zoom | Shift+Wheel: Pan H<br>MidClick+Drag: Pan | Space+Drag: Pan<br>Enter: Finish Polygon</p>
+            </div>
+            <div class="control-group" id="effectControlsContainer" style="display:none;">
+                <h3>Effect Overlay</h3>
+                <label for="effectOpacity">Opacity: <span id="effectOpacityValue">1.0</span></label>
+                <input type="range" id="effectOpacity" min="0" max="1" step="0.01" value="1.0">
+                <button id="btnRemoveEffect">Remove Effect</button>
+            </div>
+        </div>
+    </div>
+    <div id="alertModal" style="display:none; position:fixed; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background-color:#444; padding:20px 40px; border-radius:5px; text-align:center;">
+            <p id="alertModalText" style="margin-bottom:20px; color:#eee;"></p><button id="alertModalClose" style="padding:8px 20px;">OK</button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTS & UTILS ---
+        const HANDLE_SIZE = 8;
+        const MAX_UNDO_STATES = 30;
+        const POINT_MASS = 1;
+
+        const MATERIAL_PRESETS = {
+            custom: { s: 0.2, as: 0.5, d: 0.07 },
+            jelly_firm: { s: 0.5, as: 0.8, d: 0.15 },
+            jelly_medium: { s: 0.2, as: 0.5, d: 0.07 },
+            jelly_loose: { s: 0.08, as: 0.2, d: 0.04 },
+            cloth_light: { s: 0.1, as: 1.5, d: 0.1 },
+            cloth_heavy: { s: 0.2, as: 2.0, d: 0.15 },
+            rubber_band: { s: 0.8, as: 1.0, d: 0.05 },
+            slime: { s: 0.05, as: 0.1, d: 0.2 },
+            water_surface: { s: 0.1, as: 0.8, d: 0.03 }
+        };
+
+        function deepClone(obj) {
+            if (obj === null || typeof obj !== 'object') return obj;
+            if (obj instanceof HTMLCanvasElement) {
+                const canvasClone = document.createElement('canvas');
+                canvasClone.width = obj.width;
+                canvasClone.height = obj.height;
+                const ctx = canvasClone.getContext('2d');
+                if (obj.width > 0 && obj.height > 0) {
+                    try { ctx.drawImage(obj, 0, 0); } catch (e) { /* Silently ignore */ }
+                }
+                return canvasClone;
+            }
+            const clone = Array.isArray(obj) ? [] : {};
+            for (let key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    clone[key] = deepClone(obj[key]);
+                }
+            }
+            return clone;
+        }
+
+        class DomHelper {
+            constructor(ids) {
+                this.elements = {};
+                ids.forEach(id => { this.elements[id] = document.getElementById(id); });
+                this.elements.canvasArea = document.querySelector('.canvas-area');
+            }
+            get(id) { return this.elements[id]; }
+            showModal(message) {
+                const textEl = this.get('alertModalText'); if (textEl) textEl.textContent = message;
+                const modalEl = this.get('alertModal'); if (modalEl) modalEl.style.display = 'flex';
+            }
+            hideModal() { const modalEl = this.get('alertModal'); if (modalEl) modalEl.style.display = 'none'; }
+        }
+
+        class Shape {
+            static nextId = 0;
+            static HANDLE_SIZE = 8;
+
+            constructor(type, x, y, w, h, meshDensity = 10, physicsProps = MATERIAL_PRESETS.jelly_medium, svgData = null) {
+                this.id = `s${Shape.nextId++}`;
+                this.type = type; this.x = x; this.y = y; this.width = w; this.height = h;
+                this.isSelected = false; this.isDeformable = false; this.mesh = null;
+                this.textureCanvas = null; this.physicsProps = deepClone(physicsProps);
+                this.initialMeshDensity = meshDensity; this.activeDeformationPoint = null;
+                this.isSettling = false; this.vertices = []; this.svgData = svgData;
+                this.svgImage = null; this.svgImageLoading = false; this.app = null;
+                this.effectOverlay = null;
+            }
+
+            static getNextId() { return Shape.nextId; }
+            static setNextId(val) { Shape.nextId = val; }
+
+            _createMesh(meshDensity) {
+                const cols = meshDensity, rows = meshDensity;
+                if (this.width < 1 || this.height < 1 || cols < 2 || rows < 2) return null;
+                const points = [], cellW = this.width / (cols - 1), cellH = this.height / (rows - 1);
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        points.push({
+                            originalX: c * cellW, originalY: r * cellH, currentX: c * cellW, currentY: r * cellH,
+                            vx: 0, vy: 0, mass: POINT_MASS,
+                            isFixed: (r === 0 || r === rows - 1 || c === 0 || c === cols - 1)
+                        });
+                    }
+                }
+                return { points, cols, rows, cellWidth: cellW, cellHeight: cellH };
+            }
+
+            initializeDeformation(originalImage, meshDensity = this.initialMeshDensity, physicsProps = this.physicsProps) {
+                const isSvgType = this.type === 'svg_procedural';
+                if (!isSvgType && !originalImage) { this.isDeformable = false; return; }
+
+                this.initialMeshDensity = meshDensity; this.physicsProps = deepClone(physicsProps);
+                if (this.type === 'polygon' && this.vertices.length > 0) this._updateBoundingBoxFromVertices();
+                
+                this.mesh = this._createMesh(meshDensity);
+                if (!this.mesh) { this.isDeformable = false; return; }
+                if (!this.textureCanvas) this.textureCanvas = document.createElement('canvas');
+
+                if (isSvgType) {
+                    this._rasterizeSvgToTexture(); // Callback inside handles isDeformable
+                } else {
+                    this.recaptureTexture(originalImage); // Sets isDeformable on success
+                }
+            }
+
+            _rasterizeSvgToTexture(callback) { // Added callback parameter
+                if (this.type !== 'svg_procedural' || !this.svgData || this.svgImageLoading) {
+                    if (callback) callback(false); return;
+                }
+                this.svgImageLoading = true; this.isDeformable = false; // Assume failure until success
+
+                this.svgImage = new Image();
+                this.svgImage.onload = () => {
+                    if (!this.textureCanvas) this.textureCanvas = document.createElement('canvas');
+                    this.textureCanvas.width = Math.max(1, Math.floor(this.width));
+                    this.textureCanvas.height = Math.max(1, Math.floor(this.height));
+                    const texCtx = this.textureCanvas.getContext('2d');
+                    texCtx.clearRect(0, 0, this.textureCanvas.width, this.textureCanvas.height);
+                    try {
+                        texCtx.drawImage(this.svgImage, 0, 0, this.textureCanvas.width, this.textureCanvas.height);
+                        this.isDeformable = !!this.mesh; // Successfully rasterized, deformable if mesh exists
+                        if (callback) callback(true);
+                    } catch (e) {
+                        console.error("Shape._rasterizeSvgToTexture: Error drawing SVG to textureCanvas", e);
+                        this.isDeformable = false; // Ensure it's false on error
+                        if (callback) callback(false);
+                    }
+                    this.svgImageLoading = false;
+                    if (this.svgImage.src && this.svgImage.src.startsWith('blob:')) URL.revokeObjectURL(this.svgImage.src);
+                    if (this.app && this.app.canvasView) this.app.canvasView.render();
+                };
+                this.svgImage.onerror = (e) => {
+                    console.error("Shape._rasterizeSvgToTexture: Failed to load SVG data", this.id, e);
+                    if (this.svgImage.src && this.svgImage.src.startsWith('blob:')) URL.revokeObjectURL(this.svgImage.src);
+                    this.svgImageLoading = false; this.isDeformable = false;
+                    if (callback) callback(false);
+                    if (this.app && this.app.canvasView) this.app.canvasView.render();
+                };
+                try {
+                    const svgBlob = new Blob([this.svgData], { type: 'image/svg+xml;charset=utf-8' });
+                    this.svgImage.src = URL.createObjectURL(svgBlob);
+                } catch (e) {
+                    console.error("Shape._rasterizeSvgToTexture: Error creating SVG blob URL", e);
+                    this.svgImageLoading = false; this.isDeformable = false;
+                    if (callback) callback(false);
+                }
+            }
+            
+            _updateBoundingBoxFromVertices() {
+                if (this.type !== 'polygon' || this.vertices.length === 0) return;
+                let minX = this.vertices[0].x, maxX = this.vertices[0].x, minY = this.vertices[0].y, maxY = this.vertices[0].y;
+                for (let i = 1; i < this.vertices.length; i++) {
+                    minX = Math.min(minX, this.vertices[i].x); maxX = Math.max(maxX, this.vertices[i].x);
+                    minY = Math.min(minY, this.vertices[i].y); maxY = Math.max(maxY, this.vertices[i].y);
+                }
+                this.width = maxX - minX; this.height = maxY - minY;
+            }
+
+            recaptureTexture(originalImage) {
+                if (this.type === 'svg_procedural') {
+                    if (!this.svgImage || !this.svgImage.complete || this.svgImage.naturalWidth === 0) {
+                        this._rasterizeSvgToTexture(); // Will set isDeformable via its internal logic
+                    } else if (this.mesh && this.textureCanvas) { // Check if it *can* be deformable
+                        this.textureCanvas.width = Math.max(1, Math.floor(this.width));
+                        this.textureCanvas.height = Math.max(1, Math.floor(this.height));
+                        const texCtx = this.textureCanvas.getContext('2d');
+                        texCtx.clearRect(0, 0, this.textureCanvas.width, this.textureCanvas.height);
+                        try {
+                            texCtx.drawImage(this.svgImage, 0, 0, this.textureCanvas.width, this.textureCanvas.height);
+                            this.isDeformable = true; // Explicitly true if drawing worked
+                        } catch (e) {
+                            console.error("Shape.recaptureTexture (SVG): Error redrawing SVG to textureCanvas", e);
+                            this.isDeformable = false;
+                        }
+                    } else {
+                        this.isDeformable = false; // Cannot be deformable if no mesh or textureCanvas
+                    }
+                    return;
+                }
+
+                if (!originalImage || !this.mesh) { this.isDeformable = false; return; }
+                
+                if (!this.textureCanvas) this.textureCanvas = document.createElement('canvas');
+                this.textureCanvas.width = Math.max(1, Math.floor(this.width));
+                this.textureCanvas.height = Math.max(1, Math.floor(this.height));
+                const texCtx = this.textureCanvas.getContext('2d');
+                texCtx.clearRect(0, 0, this.textureCanvas.width, this.textureCanvas.height);
+
+                const sX = Math.max(0, this.x), sY = Math.max(0, this.y),
+                      sW = Math.min(this.width, originalImage.width - sX),
+                      sH = Math.min(this.height, originalImage.height - sY);
+
+                if (sW <= 0 || sH <= 0) { this.isDeformable = false; return; }
+                try {
+                    texCtx.save();
+                    if (this.type === 'polygon' && this.vertices.length > 2) {
+                        texCtx.beginPath(); this.vertices.forEach((v, i) => { if (i === 0) texCtx.moveTo(v.x, v.y); else texCtx.lineTo(v.x, v.y); });
+                        texCtx.closePath(); texCtx.clip();
+                    } else if (this.type === 'ellipse') {
+                        texCtx.beginPath(); texCtx.ellipse(this.textureCanvas.width / 2, this.textureCanvas.height / 2, this.textureCanvas.width / 2, this.textureCanvas.height / 2, 0, 0, 2 * Math.PI);
+                        texCtx.clip();
+                    }
+                    texCtx.drawImage(originalImage, sX, sY, sW, sH, 0, 0, this.textureCanvas.width, this.textureCanvas.height);
+                    texCtx.restore();
+                    this.isDeformable = true; // Successfully captured, now it's deformable
+                } catch (e) {
+                    console.error("Shape.recaptureTexture: Error drawing to textureCanvas", e);
+                    this.isDeformable = false;
+                }
+            }
+
+            updateMeshAndTexture(originalImage, newMeshDensity) {
+                if (newMeshDensity) this.initialMeshDensity = newMeshDensity;
+                if (this.type === 'polygon' && this.vertices.length > 0) this._updateBoundingBoxFromVertices();
+                
+                this.mesh = this._createMesh(this.initialMeshDensity);
+                if (!this.mesh) { this.isDeformable = false; return; }
+                
+                if (this.type === 'svg_procedural') {
+                    this._rasterizeSvgToTexture(); // This will handle setting isDeformable
+                } else if (originalImage) {
+                    this.recaptureTexture(originalImage); // This will handle setting isDeformable
+                } else {
+                    this.isDeformable = false;
+                }
+            }
+
+            applyEffectOverlay(svgData, opacity, effectWidth, effectHeight) {
+                this.effectOverlay = {
+                    svgData: svgData, opacity: Math.max(0, Math.min(1, opacity)),
+                    width: effectWidth || this.width, height: effectHeight || this.height,
+                    svgImage: null, svgImageLoading: false
+                };
+                this._rasterizeEffectOverlay();
+                if (this.app && this.app.canvasView) this.app.canvasView.render();
+            }
+
+            removeEffectOverlay() {
+                if (this.effectOverlay && this.effectOverlay.svgImage && this.effectOverlay.svgImage.src && this.effectOverlay.svgImage.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(this.effectOverlay.svgImage.src);
+                }
+                this.effectOverlay = null;
+                if (this.app && this.app.canvasView) this.app.canvasView.render();
+            }
+
+            _rasterizeEffectOverlay(callback) {
+                if (!this.effectOverlay || !this.effectOverlay.svgData || this.effectOverlay.svgImageLoading) {
+                    if (callback) callback(false); return;
+                }
+                this.effectOverlay.svgImageLoading = true;
+                const effectImg = new Image();
+                effectImg.onload = () => {
+                    this.effectOverlay.svgImage = effectImg; this.effectOverlay.svgImageLoading = false;
+                    if (callback) callback(true);
+                    if (this.effectOverlay.svgImage.src && this.effectOverlay.svgImage.src.startsWith('blob:')) URL.revokeObjectURL(this.effectOverlay.svgImage.src);
+                    if (this.app && this.app.canvasView) this.app.canvasView.render();
+                };
+                effectImg.onerror = (e) => {
+                    console.error("Shape._rasterizeEffectOverlay: Failed to load effect SVG", e);
+                    if (effectImg.src && effectImg.src.startsWith('blob:')) URL.revokeObjectURL(effectImg.src);
+                    this.effectOverlay.svgImageLoading = false; this.effectOverlay.svgImage = null;
+                    if (callback) callback(false);
+                    if (this.app && this.app.canvasView) this.app.canvasView.render();
+                };
+                try {
+                    const svgBlob = new Blob([this.effectOverlay.svgData], { type: 'image/svg+xml;charset=utf-8' });
+                    effectImg.src = URL.createObjectURL(svgBlob);
+                } catch (e) {
+                    console.error("Shape._rasterizeEffectOverlay: Error creating effect SVG blob URL", e);
+                    this.effectOverlay.svgImageLoading = false; if (callback) callback(false);
+                }
+            }
+
+            draw(ctx, viewTransform, isCurrentlyDeformingOrSettling = false) {
+                ctx.save();
+                const lineWidth = (this.isSelected ? 3 : 2) / viewTransform.scale; ctx.lineWidth = lineWidth;
+
+                if (this.isDeformable && this.textureCanvas && this.mesh && (isCurrentlyDeformingOrSettling || this.isSettling || this.activeDeformationPoint)) {
+                    this.drawDeformedMesh(ctx, viewTransform);
+                } else if (this.type === 'svg_procedural') {
+                    if (this.svgImage && this.svgImage.complete && this.svgImage.naturalWidth > 0) {
+                        ctx.drawImage(this.svgImage, this.x, this.y, this.width, this.height);
+                    } else if (this.svgData && !this.svgImageLoading) {
+                        this._rasterizeSvgToTexture();
+                        ctx.strokeStyle = this.isSelected ? '#0FF' : '#DDD'; ctx.strokeRect(this.x, this.y, this.width, this.height);
+                        const fontSize = Math.max(8, 12 / viewTransform.scale); ctx.font = `${fontSize}px sans-serif`; ctx.fillStyle = '#DDD'; ctx.textAlign = 'center';
+                        ctx.fillText("Loading SVG...", this.x + this.width / 2, this.y + this.height / 2 + fontSize / 2);
+                    } else if (this.svgImageLoading) { /* Placeholder for loading */ } 
+                    else { ctx.strokeStyle = this.isSelected ? '#0FF' : '#888'; ctx.strokeRect(this.x, this.y, this.width, this.height); }
+                } else {
+                    if (this.type === 'rect') { ctx.strokeStyle = this.isSelected ? '#0FF' : '#F00'; ctx.strokeRect(this.x, this.y, this.width, this.height); }
+                    else if (this.type === 'ellipse') { ctx.strokeStyle = this.isSelected ? '#0FF' : '#FA0'; if (this.width > 0 && this.height > 0) { ctx.beginPath(); ctx.ellipse(this.x + this.width / 2, this.y + this.height / 2, this.width / 2, this.height / 2, 0, 0, 2 * Math.PI); ctx.stroke(); } }
+                    else if (this.type === 'polygon') { ctx.strokeStyle = this.isSelected ? '#0FF' : '#0F0'; if (this.vertices.length > 1) { ctx.beginPath(); this.vertices.forEach((v, i) => { if (i === 0) ctx.moveTo(this.x + v.x, this.y + v.y); else ctx.lineTo(this.x + v.x, this.y + v.y); }); if (this.vertices.length > 2) ctx.closePath(); ctx.stroke(); } }
+                }
+                
+                if (this.effectOverlay && this.effectOverlay.svgImage && this.effectOverlay.svgImage.complete && this.effectOverlay.svgImage.naturalWidth > 0) {
+                    ctx.globalAlpha = this.effectOverlay.opacity;
+                    ctx.drawImage(this.effectOverlay.svgImage, this.x, this.y, this.effectOverlay.width, this.effectOverlay.height);
+                } else if (this.effectOverlay && this.effectOverlay.svgData && !this.effectOverlay.svgImageLoading) {
+                    this._rasterizeEffectOverlay();
+                    ctx.save(); ctx.globalAlpha = (this.effectOverlay.opacity || 1.0) * 0.5; ctx.fillStyle = "rgba(100,100,255,0.3)";
+                    ctx.fillRect(this.x, this.y, this.effectOverlay.width, this.effectOverlay.height);
+                    const fontSize = Math.max(8, 10 / viewTransform.scale); ctx.font = `${fontSize}px sans-serif`; ctx.fillStyle = '#FFF'; ctx.textAlign='center';
+                    ctx.fillText("FX", this.x + this.effectOverlay.width / 2, this.y + this.effectOverlay.height / 2 + fontSize/2);
+                    ctx.restore();
+                }
+                ctx.restore();
+
+                if (this.isSelected && this.app.currentTool !== 'deformMode' && !isCurrentlyDeformingOrSettling) {
+                    if (!(this.app.currentTool === 'deformMode' && this.app.selectedShape === this)) {
+                        this.drawHandles(ctx, viewTransform);
+                    }
+                }
+            }
+
+            drawDeformedMesh(ctx, viewTransform) {
+                if (!this.mesh || !this.textureCanvas || this.textureCanvas.width === 0 || this.textureCanvas.height === 0) {
+                    if (this.mesh) this.drawGridLines(ctx, viewTransform, 'rgba(255,100,100,0.5)'); return;
+                }
+                const { points: P, cols: C, rows: R, cellWidth: cW, cellHeight: cH } = this.mesh;
+                ctx.save();
+                if (this.type === 'polygon' && this.vertices.length > 2) {
+                    ctx.beginPath(); this.vertices.forEach((v, i) => { if (i === 0) ctx.moveTo(this.x + v.x, this.y + v.y); else ctx.lineTo(this.x + v.x, this.y + v.y); });
+                    ctx.closePath(); ctx.clip();
+                }
+                for (let r = 0; r < R - 1; r++) {
+                    for (let c = 0; c < C - 1; c++) {
+                        const p0 = P[r*C+c], p1 = P[r*C+(c+1)], p2 = P[(r+1)*C+c], p3 = P[(r+1)*C+(c+1)];
+                        const tX = p0.originalX, tY = p0.originalY, tW = Math.max(1,cW), tH = Math.max(1,cH);
+                        const dX0=this.x+p0.currentX,dY0=this.y+p0.currentY,dX1=this.x+p1.currentX,dY1=this.y+p1.currentY,dX2=this.x+p2.currentX,dY2=this.y+p2.currentY,dX3=this.x+p3.currentX,dY3=this.y+p3.currentY;
+                        ctx.save(); ctx.beginPath(); ctx.moveTo(dX0,dY0);ctx.lineTo(dX1,dY1);ctx.lineTo(dX3,dY3);ctx.lineTo(dX2,dY2);ctx.closePath();ctx.clip();
+                        const minX=Math.min(dX0,dX1,dX2,dX3),minY=Math.min(dY0,dY1,dY2,dY3),maxX=Math.max(dX0,dX1,dX2,dX3),maxY=Math.max(dY0,dY1,dY2,dY3);
+                        const dW=Math.max(1,maxX-minX),dH=Math.max(1,maxY-minY);
+                        try { if (tW>0 && tH>0 && this.textureCanvas.width>0 && this.textureCanvas.height>0) ctx.drawImage(this.textureCanvas,tX,tY,tW,tH,minX,minY,dW,dH); } catch(e){}
+                        ctx.restore();
+                    }
+                }
+                ctx.restore();
+                if (this.activeDeformationPoint || this.isSettling) this.drawGridLines(ctx, viewTransform, 'rgba(200,200,255,0.2)');
+            }
+
+            drawGridLines(ctx, viewTransform, colorStyle = 'rgba(100,100,255,0.4)') {
+                if (!this.mesh) return;
+                const { points: P, cols: C, rows: R } = this.mesh; ctx.save(); ctx.beginPath();
+                for (let r = 0; r < R; r++) {
+                    for (let c = 0; c < C; c++) {
+                        const p = P[r*C+c], sX = this.x+p.currentX, sY = this.y+p.currentY;
+                        if (c < C-1) { const pR = P[r*C+(c+1)]; ctx.moveTo(sX,sY); ctx.lineTo(this.x+pR.currentX,this.y+pR.currentY); }
+                        if (r < R-1) { const pD = P[(r+1)*C+c]; ctx.moveTo(sX,sY); ctx.lineTo(this.x+pD.currentX,this.y+pD.currentY); }
+                    }
+                }
+                ctx.strokeStyle = colorStyle; ctx.lineWidth = 0.5 / viewTransform.scale; ctx.stroke(); ctx.restore();
+            }
+
+            getResizeHandles() {
+                const H=[]; const x=this.x,y=this.y,w=this.width,h=this.height,cx=x+w/2,cy=y+h/2;
+                if (this.type==='rect'){H.push({id:0,x:x,y:y},{id:1,x:cx,y:y},{id:2,x:x+w,y:y},{id:3,x:x+w,y:cy},{id:4,x:x+w,y:y+h},{id:5,x:cx,y:y+h},{id:6,x:x,y:y+h},{id:7,x:x,y:cy});}
+                else if (this.type==='ellipse'){H.push({id:0,x:cx,y:y},{id:1,x:x+w,y:cy},{id:2,x:cx,y:y+h},{id:3,x:x,y:cy});}
+                return H;
+            }
+            drawHandles(ctx, viewTransform) {
+                if(!this.isSelected)return; const H=this.getResizeHandles(); ctx.fillStyle='#0FF';
+                const S=Shape.HANDLE_SIZE/viewTransform.scale; H.forEach(h=>{ctx.fillRect(h.x-S/2,h.y-S/2,S,S);});
+            }
+            isPointInside(iX,iY){
+                if(this.type==='rect'){return iX>=this.x&&iX<=this.x+this.width&&iY>=this.y&&iY<=this.y+this.height;}
+                else if(this.type==='ellipse'){const cx=this.x+this.width/2,cy=this.y+this.height/2,rx=this.width/2,ry=this.height/2;if(rx<=0||ry<=0)return false;const dx=iX-cx,dy=iY-cy;return(dx*dx)/(rx*rx)+(dy*dy)/(ry*ry)<=1;}
+                else if(this.type==='polygon'){if(this.vertices.length<3)return false;const rX=iX-this.x,rY=iY-this.y;let ins=false;for(let i=0,j=this.vertices.length-1;i<this.vertices.length;j=i++){const xi=this.vertices[i].x,yi=this.vertices[i].y,xj=this.vertices[j].x,yj=this.vertices[j].y;const intersect=((yi>rY)!==(yj>rY))&&(rX<(xj-xi)*(rY-yi)/(yj-yi)+xi);if(intersect)ins=!ins;}return ins;}
+                return false;
+            }
+            getHandleAt(iX,iY,vS){const H=this.getResizeHandles();const R=(Shape.HANDLE_SIZE*0.75)/vS;for(const h of H)if(Math.sqrt((h.x-iX)**2+(h.y-iY)**2)<R)return h.id;return null;}
+            resize(hId,nIX,nIY,oI,mD){let{x:oX,y:oY,width:oW,height:oH}=this;let nX=oX,nY=oY,nW=oW,nH=oH;const minD=mD>0?mD:10;
+                if(this.type==='rect'){switch(hId){case 0:nW=oX+oW-nIX;nH=oY+oH-nIY;nX=nIX;nY=nIY;break;case 1:nH=oY+oH-nIY;nY=nIY;break;case 2:nW=nIX-oX;nH=oY+oH-nIY;nY=nIY;break;case 3:nW=nIX-oX;break;case 4:nW=nIX-oX;nH=nIY-oY;break;case 5:nH=nIY-oY;break;case 6:nW=oX+oW-nIX;nH=nIY-oY;nX=nIX;break;case 7:nW=oX+oW-nIX;nX=nIX;break;}}
+                else if(this.type==='ellipse'){const cX=oX+oW/2,cY=oY+oH/2;switch(hId){case 0:nH=2*Math.abs(cY-nIY);nY=cY-nH/2;break;case 1:nW=2*Math.abs(nIX-cX);nX=cX-nW/2;break;case 2:nH=2*Math.abs(nIY-cY);nY=cY-nH/2;break;case 3:nW=2*Math.abs(cX-nIX);nX=cX-nW/2;break;}if(hId===0||hId===2)nX=cX-nW/2;else if(hId===1||hId===3)nY=cY-nH/2;}
+                this.x=nX;this.y=nY;this.width=Math.max(minD,nW);this.height=Math.max(minD,nH);this.updateMeshAndTexture(oI,mD);
+            }
+            startPhysicsInteraction(iMX, iMY) {
+                if (!this.isDeformable || !this.mesh) return false;
+                // this.stopPhysicsSimulation(); // App loop handles this by removing from active set if needed
+                const lX = iMX - this.x, lY = iMY - this.y; let cPI = -1, mDS = Infinity;
+                this.mesh.points.forEach((p, i) => { if (p.isFixed) return; const dS = (p.currentX - lX)**2 + (p.currentY - lY)**2; if (dS < mDS) { mDS = dS; cPI = i; } });
+                const gRSq = (this.mesh.cellWidth**2 + this.mesh.cellHeight**2) / 1.5; // Slightly more generous grab radius
+                if (cPI !== -1 && mDS < gRSq) {
+                    const dP = this.mesh.points[cPI];
+                    this.activeDeformationPoint = { pointIndex: cPI, mouseOffsetX: dP.currentX - lX, mouseOffsetY: dP.currentY - lY };
+                    this.isSettling = false; return true;
+                }
+                return false;
+            }
+            updatePhysicsInteraction(iMX,iMY){if(!this.activeDeformationPoint||!this.mesh)return;const{pointIndex:pI,mouseOffsetX:mOX,mouseOffsetY:mOY}=this.activeDeformationPoint;const dP=this.mesh.points[pI];const lX=iMX-this.x,lY=iMY-this.y;dP.currentX=lX+mOX;dP.currentY=lY+mOY;}
+            endPhysicsInteraction(sS=true){this.activeDeformationPoint=null;if(sS&&this.isDeformable&&this.mesh)this.isSettling=true;}
+            runPhysicsSimulationStep(dT,sTS){if(!this.isDeformable||!this.mesh||dT<=0)return false;let eDT=Math.min(dT,0.033)*sTS;let hM=false;const{stiffness:oK,adjacentStiffness:aK,damping:dC}=this.physicsProps;const{points:P,cols:C,rows:R,cellWidth:cW,cellHeight:cH}=this.mesh;
+                P.forEach((p,idx)=>{if(p.isFixed)return;if(this.activeDeformationPoint&&this.activeDeformationPoint.pointIndex===idx)return;let fX=0,fY=0;fX+=oK*(p.originalX-p.currentX);fY+=oK*(p.originalY-p.currentY);const r=Math.floor(idx/C),c=idx%C;const N=(nI,dX,dY)=>{const n=P[nI];fX+=aK*((n.currentX+dX)-p.currentX);fY+=aK*((n.currentY+dY)-p.currentY);};
+                if(c>0)N(idx-1,cW,0);if(c<C-1)N(idx+1,-cW,0);if(r>0)N(idx-C,0,cH);if(r<R-1)N(idx+C,0,-cH);
+                fX-=dC*p.vx;fY-=dC*p.vy;p.vx+=(fX/p.mass)*eDT;p.vy+=(fY/p.mass)*eDT;p.currentX+=p.vx*eDT;p.currentY+=p.vy*eDT;
+                if(Math.abs(p.vx)>0.01||Math.abs(p.vy)>0.01||Math.abs(p.originalX-p.currentX)>0.1||Math.abs(p.originalY-p.currentY)>0.1)hM=true;
+                }); return hM;
+            }
+            isCompletelySettled(){if(!this.isDeformable||!this.mesh)return true;return this.mesh.points.every(p=>p.isFixed||(Math.abs(p.vx)<0.01&&Math.abs(p.vy)<0.01&&Math.abs(p.originalX-p.currentX)<0.1&&Math.abs(p.originalY-p.currentY)<0.1));}
+            resetMeshPoints(){if(!this.mesh)return;this.mesh.points.forEach(p=>{if(!p.isFixed){p.currentX=p.originalX;p.currentY=p.originalY;p.vx=0;p.vy=0;}});this.isSettling=false;this.activeDeformationPoint=null;}
+            stopPhysicsSimulation(){}
+            toState(){const S={id:this.id,type:this.type,x:this.x,y:this.y,width:this.width,height:this.height,isSelected:this.isSelected,isDeformable:this.isDeformable,physicsProps:deepClone(this.physicsProps),initialMeshDensity:this.initialMeshDensity,svgData:this.svgData,effectOverlay:this.effectOverlay?{svgData:this.effectOverlay.svgData,opacity:this.effectOverlay.opacity,width:this.effectOverlay.width,height:this.effectOverlay.height}:null};
+                if(this.type==='polygon')S.vertices=deepClone(this.vertices);
+                if(this.isDeformable&&this.textureCanvas&&this.textureCanvas.width>0&&this.textureCanvas.height>0)S.textureCanvasDataUrl=this.textureCanvas.toDataURL();
+                if(this.mesh)S.meshPointsState=deepClone(this.mesh.points.map(p=>({currentX:p.currentX,currentY:p.currentY,vx:p.vx,vy:p.vy,originalX:p.originalX,originalY:p.originalY})));
+                return S;
+            }
+            static fromState(sD,oI,appInst){const s=new Shape(sD.type,sD.x,sD.y,sD.width,sD.height,sD.initialMeshDensity,sD.physicsProps,sD.svgData);s.id=sD.id;s.isSelected=sD.isSelected;s.app=appInst;
+                if(sD.type==='polygon'&&sD.vertices)s.vertices=deepClone(sD.vertices);
+                if(sD.effectOverlay){s.effectOverlay={...sD.effectOverlay,svgImage:null,svgImageLoading:false};s._rasterizeEffectOverlay();}
+                if(sD.isDeformable){let dIS=(s.type==='svg_procedural')?null:oI;if(s.type==='polygon'&&s.vertices.length>0)s._updateBoundingBoxFromVertices();s.initializeDeformation(dIS,sD.initialMeshDensity,sD.physicsProps);
+                    if(s.isDeformable&&sD.textureCanvasDataUrl&&s.textureCanvas){const i=new Image();i.onload=()=>{if(s.textureCanvas){s.textureCanvas.width=i.width;s.textureCanvas.height=i.height;s.textureCanvas.getContext('2d').drawImage(i,0,0);if(s.app&&s.app.canvasView)s.app.canvasView.render();}};i.src=sD.textureCanvasDataUrl;}
+                    else if(s.type==='svg_procedural'&&s.isDeformable&&!sD.textureCanvasDataUrl&&s.svgData){s._rasterizeSvgToTexture();}
+                    if(s.mesh&&sD.meshPointsState&&sD.meshPointsState.length===s.mesh.points.length){s.mesh.points.forEach((p,idx)=>{const sP=sD.meshPointsState[idx];p.currentX=sP.currentX;p.currentY=sP.currentY;p.vx=sP.vx;p.vy=sP.vy;p.originalX=sP.originalX;p.originalY=sP.originalY;});if(!s.isCompletelySettled())s.isSettling=true;}
+                }else{s.isDeformable=false;if(s.type==='svg_procedural'&&s.svgData&&(!s.svgImage||!s.svgImage.complete)){s._rasterizeSvgToTexture();}}
+                return s;
+            }
+        }
+
+        class CanvasView {
+            constructor(app){this.app=app;this.canvas=document.getElementById('imageCanvas');this.canvasArea=document.querySelector('.canvas-area');this.ctx=this.canvas.getContext('2d');this.viewTransform={x:0,y:0,scale:1};this.resizeCanvas();}
+            resizeCanvas(){if(!this.canvasArea||!this.canvas)return;this.canvas.width=this.canvasArea.clientWidth;this.canvas.height=this.canvasArea.clientHeight;this.render();}
+            fitImageToView(img){if(!img||!this.canvasArea||!this.canvas)return;const aW=this.canvasArea.clientWidth,aH=this.canvasArea.clientHeight;const hR=aW/img.width,vR=aH/img.height;this.viewTransform.scale=Math.min(hR,vR,1);this.viewTransform.x=(aW-img.width*this.viewTransform.scale)/2;this.viewTransform.y=(aH-img.height*this.viewTransform.scale)/2;this.render();}
+            resetView(){this.viewTransform={x:0,y:0,scale:1};if(this.app.originalImage)this.fitImageToView(this.app.originalImage);else this.resizeCanvas();}
+            screenToImgPos(sX,sY){return{x:(sX-this.viewTransform.x)/this.viewTransform.scale,y:(sY-this.viewTransform.y)/this.viewTransform.scale};}
+            pan(dX,dY){this.viewTransform.x+=dX;this.viewTransform.y+=dY;this.render();}
+            zoom(factor,cX,cY){const wMX=(cX-this.viewTransform.x)/this.viewTransform.scale,wMY=(cY-this.viewTransform.y)/this.viewTransform.scale;let nS=this.viewTransform.scale*factor;nS=Math.max(0.05,Math.min(nS,20));this.viewTransform.x=cX-wMX*nS;this.viewTransform.y=cY-wMY*nS;this.viewTransform.scale=nS;this.render();}
+            drawPlaceholder(){if(!this.ctx||!this.canvas)return;this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);this.ctx.fillStyle='#555';this.ctx.textAlign='center';this.ctx.font='20px Arial';this.ctx.fillText('Upload an image',this.canvas.width/2,this.canvas.height/2);}
+            render(){if(!this.app||!this.ctx||!this.canvasArea)return;const img=this.app.originalImage;this.ctx.fillStyle=getComputedStyle(this.canvasArea).backgroundColor;this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);this.ctx.save();this.ctx.translate(this.viewTransform.x,this.viewTransform.y);this.ctx.scale(this.viewTransform.scale,this.viewTransform.scale);this.ctx.imageSmoothingEnabled=true;if(img)this.ctx.drawImage(img,0,0);
+                this.app.shapes.forEach(s=>{const iDS=s.activeDeformationPoint||s.isSettling;s.draw(this.ctx,this.viewTransform,iDS);});
+                if(this.app.isDrawingShape&&this.app.shapeDrawStartPos&&this.app.currentMouseImagePos&&(this.app.currentTool==='drawRect'||this.app.currentTool==='drawEllipse')){this.ctx.strokeStyle='rgba(0,255,0,0.7)';this.ctx.lineWidth=2/this.viewTransform.scale;const{x:x1,y:y1}=this.app.shapeDrawStartPos;const{x:x2,y:y2}=this.app.currentMouseImagePos;const rX=Math.min(x1,x2),rY=Math.min(y1,y2),rW=Math.abs(x1-x2),rH=Math.abs(y1-y2);if(this.app.currentTool==='drawRect')this.ctx.strokeRect(rX,rY,rW,rH);else if(this.app.currentTool==='drawEllipse'&&rW>0&&rH>0){this.ctx.beginPath();this.ctx.ellipse(rX+rW/2,rY+rH/2,rW/2,rH/2,0,0,2*Math.PI);this.ctx.stroke();}}
+                if(this.app.currentTool==='drawPolygon'&&this.app.currentDrawingPolygonVertices.length>0){this.ctx.strokeStyle='rgba(0,255,255,0.8)';this.ctx.fillStyle='rgba(0,255,255,0.5)';this.ctx.lineWidth=1.5/this.viewTransform.scale;const pS=4/this.viewTransform.scale;this.ctx.beginPath();this.app.currentDrawingPolygonVertices.forEach((v,i)=>{if(i===0)this.ctx.moveTo(v.x,v.y);else this.ctx.lineTo(v.x,v.y);this.ctx.fillRect(v.x-pS/2,v.y-pS/2,pS,pS);});if(this.app.currentMouseImagePos){this.ctx.lineTo(this.app.currentMouseImagePos.x,this.app.currentMouseImagePos.y);}this.ctx.stroke();}
+                this.ctx.restore();
+            }
+        }
+
+        class HistoryManager{constructor(app){this.app=app;this.undoStack=[];this.redoStack=[];this.maxStates=MAX_UNDO_STATES;}
+            saveState(){this.redoStack=[];if(this.undoStack.length>=this.maxStates)this.undoStack.shift();const S={shapes:this.app.shapes.map(s=>s.toState()),selectedShapeId:this.app.selectedShape?this.app.selectedShape.id:null,nextShapeId:Shape.getNextId()};this.undoStack.push(deepClone(S));if(this.app.toolbarManager)this.app.toolbarManager.updateEditButtonStates();}
+            undo(){if(this.undoStack.length===0)return;const cS={shapes:this.app.shapes.map(s=>s.toState()),selectedShapeId:this.app.selectedShape?this.app.selectedShape.id:null,nextShapeId:Shape.getNextId()};this.redoStack.push(deepClone(cS));const pS=this.undoStack.pop();this._restoreStateLogic(pS);if(this.app.toolbarManager)this.app.toolbarManager.updateEditButtonStates();if(this.app.canvasView)this.app.canvasView.render();}
+            redo(){if(this.redoStack.length===0)return;const cS={shapes:this.app.shapes.map(s=>s.toState()),selectedShapeId:this.app.selectedShape?this.app.selectedShape.id:null,nextShapeId:Shape.getNextId()};this.undoStack.push(deepClone(cS));const nS=this.redoStack.pop();this._restoreStateLogic(nS);if(this.app.toolbarManager)this.app.toolbarManager.updateEditButtonStates();if(this.app.canvasView)this.app.canvasView.render();}
+            _restoreStateLogic(sTR){this.app.shapes=sTR.shapes.map(sD=>Shape.fromState(sD,this.app.originalImage,this.app));Shape.setNextId(sTR.nextShapeId);this.app.selectedShape=null;if(sTR.selectedShapeId)this.app.selectedShape=this.app.shapes.find(s=>s.id===sTR.selectedShapeId)||null;this.app.shapes.forEach(s=>s.isSelected=(this.app.selectedShape&&s.id===this.app.selectedShape.id));this.app.shapes.forEach(s=>{if(s.isSettling&&!s.isCompletelySettled()&&this.app)this.app.startShapePhysicsLoop(s);});if(this.app.toolbarManager)this.app.toolbarManager.updateEffectOverlayControls();}
+            clear(){this.undoStack=[];this.redoStack=[];if(this.app.toolbarManager)this.app.toolbarManager.updateEditButtonStates();}
+        }
+
+        class ClipboardManager{constructor(app){this.app=app;this.clipboardContent=null;}
+            cut(){if(!this.app.selectedShape)return;if(this.app.historyManager)this.app.historyManager.saveState();this.clipboardContent=this.app.selectedShape.toState();this.app.deleteSelectedShape(false);if(this.app.toolbarManager)this.app.toolbarManager.updateEditButtonStates();}
+            copy(){if(!this.app.selectedShape)return;this.clipboardContent=this.app.selectedShape.toState();if(this.app.toolbarManager)this.app.toolbarManager.updateEditButtonStates();}
+            paste(){if(!this.clipboardContent)return;if(this.app.historyManager)this.app.historyManager.saveState();const nSD=deepClone(this.clipboardContent);nSD.id=`s${Shape.getNextId()}`;Shape.nextId++;const o=10/(this.app.canvasView?this.app.canvasView.viewTransform.scale:1);nSD.x+=o;nSD.y+=o;const nS=Shape.fromState(nSD,this.app.originalImage,this.app);if(this.app.selectedShape)this.app.selectedShape.isSelected=false;this.app.shapes.push(nS);nS.isSelected=true;this.app.selectedShape=nS;if(this.app.canvasView)this.app.canvasView.render();if(this.app.toolbarManager){this.app.toolbarManager.updateEditButtonStates();this.app.toolbarManager.updateEffectOverlayControls();}}
+            hasContent(){return!!this.clipboardContent;}
+        }
+
+        class ToolbarManager {
+            constructor(app, dom){this.app=app;this.dom=dom;if(!this.dom){console.error("ToolbarManager: DomHelper missing.");return;}this.setupEventListeners();this.updatePhysicsDisplays();this.updateToolButtons();this.updateEffectOverlayControls();const lT=this.dom.get('toggleLeftToolbar');if(lT)lT.addEventListener('click',()=>this.toggleToolbar('left'));const rT=this.dom.get('toggleRightToolbar');if(rT)rT.addEventListener('click',()=>this.toggleToolbar('right'));}
+            setupEventListeners(){const D=this.dom;D.get('imageLoader')?.addEventListener('change',e=>this.app.loadImage(e));D.get('btnReset')?.addEventListener('click',()=>this.app.resetApplication());D.get('toolSelect')?.addEventListener('click',()=>this.app.setTool('select'));D.get('toolDeformMode')?.addEventListener('click',()=>this.app.setTool('deformMode'));D.get('toolDrawRect')?.addEventListener('click',()=>this.app.setTool('drawRect'));D.get('toolDrawEllipse')?.addEventListener('click',()=>this.app.setTool('drawEllipse'));D.get('toolDrawPolygon')?.addEventListener('click',()=>this.app.setTool('drawPolygon'));D.get('toolGenerateEffect')?.addEventListener('click',()=>this.app.generateProceduralEffect());D.get('btnUndo')?.addEventListener('click',()=>this.app.historyManager.undo());D.get('btnRedo')?.addEventListener('click',()=>this.app.historyManager.redo());D.get('btnCut')?.addEventListener('click',()=>this.app.clipboardManager.cut());D.get('btnCopy')?.addEventListener('click',()=>this.app.clipboardManager.copy());D.get('btnPaste')?.addEventListener('click',()=>this.app.clipboardManager.paste());D.get('btnClearShapes')?.addEventListener('click',()=>this.app.clearAllShapes());D.get('btnDeleteSelected')?.addEventListener('click',()=>this.app.deleteSelectedShape());D.get('materialPreset')?.addEventListener('change',()=>this.applyMaterialPreset());D.get('btnToggleAdvanced')?.addEventListener('click',()=>this.toggleAdvancedSettings());['stiffness','adjacentStiffness','damping'].forEach(id=>{D.get(id)?.addEventListener('input',()=>this.handleAdvancedParamChange());});D.get('timeScale')?.addEventListener('input',e=>{this.app.simulationTimeScale=parseFloat(e.target.value);const el=D.get('timeScaleValue');if(el)el.textContent=this.app.simulationTimeScale.toFixed(2);});D.get('meshDensity')?.addEventListener('input',e=>{this.app.meshDensity=parseInt(e.target.value);const el=D.get('meshDensityValue');if(el)el.textContent=this.app.meshDensity;});D.get('alertModalClose')?.addEventListener('click',()=>D.hideModal());D.get('effectOpacity')?.addEventListener('input',e=>{if(this.app.selectedShape&&this.app.selectedShape.effectOverlay){this.app.selectedShape.effectOverlay.opacity=parseFloat(e.target.value);D.get('effectOpacityValue').textContent=parseFloat(e.target.value).toFixed(2);this.app.canvasView.render();}});D.get('btnRemoveEffect')?.addEventListener('click',()=>{if(this.app.selectedShape){this.app.historyManager.saveState();this.app.selectedShape.removeEffectOverlay();this.updateEffectOverlayControls();this.app.canvasView.render();}});}
+            updateToolButtons(){const T=['toolSelect','toolDeformMode','toolDrawRect','toolDrawEllipse','toolDrawPolygon','toolGenerateEffect'];T.forEach(id=>{const b=this.dom.get(id);if(b)b.classList.remove('active');});let cTID=`tool${this.app.currentTool.charAt(0).toUpperCase()+this.app.currentTool.slice(1)}`;if(this.app.currentTool==='generateEffect')cTID='toolGenerateEffect';const aB=this.dom.get(cTID);if(aB)aB.classList.add('active');}
+            updateEditButtonStates(){if(!this.dom||!this.app||!this.app.historyManager||!this.app.clipboardManager)return;const D=this.dom;D.get('btnUndo').disabled=this.app.historyManager.undoStack.length===0;D.get('btnRedo').disabled=this.app.historyManager.redoStack.length===0;D.get('btnCut').disabled=!this.app.selectedShape;D.get('btnCopy').disabled=!this.app.selectedShape;D.get('btnPaste').disabled=!this.app.clipboardManager.hasContent();D.get('btnDeleteSelected').disabled=!this.app.selectedShape;}
+            applyMaterialPreset(){if(!this.dom||!this.app)return;const pN=this.dom.get('materialPreset').value;const P=MATERIAL_PRESETS[pN]||MATERIAL_PRESETS.custom;this.dom.get('stiffness').value=P.s;this.dom.get('adjacentStiffness').value=P.as;this.dom.get('damping').value=P.d;this.updatePhysicsDisplays();this.app.applyCurrentMaterialToShapes();}
+            handleAdvancedParamChange(){if(!this.dom||!this.app)return;this.dom.get('materialPreset').value='custom';this.updatePhysicsDisplays();this.app.applyCurrentMaterialToShapes();}
+            getCurrentPhysicsProperties(){if(!this.dom)return MATERIAL_PRESETS.custom;return{stiffness:parseFloat(this.dom.get('stiffness').value),adjacentStiffness:parseFloat(this.dom.get('adjacentStiffness').value),damping:parseFloat(this.dom.get('damping').value),mass:POINT_MASS};}
+            updatePhysicsDisplays(){if(!this.dom)return;this.dom.get('stiffnessValue').textContent=parseFloat(this.dom.get('stiffness').value).toFixed(3);this.dom.get('adjacentStiffnessValue').textContent=parseFloat(this.dom.get('adjacentStiffness').value).toFixed(3);this.dom.get('dampingValue').textContent=parseFloat(this.dom.get('damping').value).toFixed(3);}
+            toggleAdvancedSettings(){if(!this.dom)return;const C=this.dom.get('advancedSettingsContainer');C.classList.toggle('hidden');this.dom.get('btnToggleAdvanced').textContent=C.classList.contains('hidden')?'Advanced Settings':'Hide Advanced';}
+            toggleToolbar(side){if(!this.dom)return;const c=this.dom.get(side==='left'?'leftToolbarContainer':'rightToolbarContainer');const b=this.dom.get(side==='left'?'toggleLeftToolbar':'toggleRightToolbar');if(!c||!b)return;c.classList.toggle('collapsed');b.innerHTML=c.classList.contains('collapsed')?(side==='left'?'»':'«'):(side==='left'?'«':'»');}
+            updateEffectOverlayControls(){const cC=this.dom.get('effectControlsContainer'),oS=this.dom.get('effectOpacity'),oV=this.dom.get('effectOpacityValue'),rB=this.dom.get('btnRemoveEffect');if(this.app.selectedShape&&this.app.selectedShape.effectOverlay){cC.style.display='block';const cO=this.app.selectedShape.effectOverlay.opacity;oS.value=cO;oV.textContent=cO.toFixed(2);rB.disabled=false;}else{cC.style.display='none';oS.value=1.0;oV.textContent=(1.0).toFixed(2);rB.disabled=true;}}
+        }
+
+        class InputHandler {
+            constructor(app,cV,dom){this.app=app;this.canvasView=cV;this.dom=dom;if(!this.dom||!this.canvasView){console.error("InputHandler: Deps missing.");return;}this.isMD=false;this.isP=false;this.isMMP=false;this.lPP={x:0,y:0};this.sP=false;this.aRH=null;this.isDS=false;this.dSO={x:0,y:0};this.setupEventListeners();}
+            setupEventListeners(){const cE=this.dom.get('imageCanvas');if(!cE){console.error("InputHandler: Canvas not found.");return;}cE.addEventListener('mousedown',e=>this.handleMouseDown(e));cE.addEventListener('mousemove',e=>this.handleMouseMove(e));cE.addEventListener('mouseup',e=>this.handleMouseUp(e));cE.addEventListener('mouseleave',e=>this.handleMouseLeave(e));cE.addEventListener('wheel',e=>this.handleWheel(e),{passive:false});window.addEventListener('keydown',e=>this.handleKeyDown(e));window.addEventListener('keyup',e=>this.handleKeyUp(e));}
+            _getMousePos(e){const cE=this.dom.get('imageCanvas');if(!cE)return{sX:0,sY:0,x:0,y:0};const r=cE.getBoundingClientRect(),s=getComputedStyle(cE),bL=parseFloat(s.borderLeftWidth)||0,bT=parseFloat(s.borderTopWidth)||0;const sX=e.clientX-r.left-bL,sY=e.clientY-r.top-bT;const iP=this.canvasView.screenToImgPos(sX,sY);return{screenX:sX,screenY:sY,...iP};}
+            updateCursor(e=null){let cS='default';const cE=this.dom.get('imageCanvas');if(!cE)return;const mP=this.app.currentMouseImagePos;const cMA=e?(e.ctrlKey||e.metaKey):(this.app.ctrlCmdActive||false);
+                if(this.isP)cS='grabbing';else if(this.sP||this.isMMP)cS='grab';else if(this.app.selectedShape&&this.app.selectedShape.activeDeformationPoint)cS='grabbing';
+                else if(this.aRH){if(this.app.selectedShape){const sT=this.app.selectedShape.type;if(sT==='rect'){const hId=this.aRH.id;if([0,4].includes(hId))cS='nwse-resize';else if([1,5].includes(hId))cS='ns-resize';else if([2,6].includes(hId))cS='nesw-resize';else if([3,7].includes(hId))cS='ew-resize';}else if(sT==='ellipse'){const hId=this.aRH.id;if([0,2].includes(hId))cS='ns-resize';else if([1,3].includes(hId))cS='ew-resize';}}}
+                else if(this.isDS)cS='move';else if(this.app.isDrawingShape||['drawRect','drawEllipse','drawPolygon','generateEffect'].includes(this.app.currentTool))cS='crosshair';
+                else if((this.app.originalImage||this.app.shapes.length>0)&&mP){let hS=null;if(this.app.selectedShape&&this.app.selectedShape.isPointInside(mP.x,mP.y))hS=this.app.selectedShape;else{for(let i=this.app.shapes.length-1;i>=0;i--)if(this.app.shapes[i].isPointInside(mP.x,mP.y)){hS=this.app.shapes[i];break;}}
+                    if(this.app.currentTool==='deformMode'){if(hS&&hS.isDeformable)cS='crosshair';}
+                    else if(this.app.currentTool==='select'){let oRH=false;if(this.app.selectedShape){if(this.app.selectedShape.isDeformable&&cMA&&hS===this.app.selectedShape)cS='crosshair';else{const hId=this.app.selectedShape.getHandleAt(mP.x,mP.y,this.canvasView.viewTransform.scale);if(hId!==null){const sT=this.app.selectedShape.type;if(sT==='rect'){if([0,4].includes(hId))cS='nwse-resize';else if([1,5].includes(hId))cS='ns-resize';else if([2,6].includes(hId))cS='nesw-resize';else if([3,7].includes(hId))cS='ew-resize';}else if(sT==='ellipse'){if([0,2].includes(hId))cS='ns-resize';else if([1,3].includes(hId))cS='ew-resize';}oRH=true;}}}if(!oRH&&cS==='default'&&hS)cS=(hS.isDeformable&&cMA)?'crosshair':'move';}}
+                cE.style.cursor=cS;
+            }
+            handleMouseDown(ev){ev.preventDefault();this.isMD=true;const{screenX:sX,screenY:sY,x:iX,y:iY}=this._getMousePos(ev);this.app.updateMousePositions(sX,sY,iX,iY);this.isMMP=ev.button===1;if(this.sP||this.isMMP){this.isP=true;this.lPP={x:sX,y:sY};this.updateCursor(ev);return;}this.aRH=null;this.isDS=false;let clS=null;for(let i=this.app.shapes.length-1;i>=0;i--)if(this.app.shapes[i].isPointInside(iX,iY)){clS=this.app.shapes[i];break;}
+                const iCD=(ev.ctrlKey||ev.metaKey)&&this.app.currentTool==='select';const iDA=this.app.currentTool==='deformMode';
+                if(this.app.currentTool==='generateEffect'){this.app.generateProceduralEffect();}
+                else if((iCD||iDA)&&clS&&clS.isDeformable){if(this.app.selectedShape!==clS||!this.app.selectedShape.activeDeformationPoint)this.app.historyManager.saveState();this.app.selectShape(clS);if(clS.type!=='svg_procedural'&&this.app.originalImage)clS.recaptureTexture(this.app.originalImage);else if(clS.type==='svg_procedural')clS._rasterizeSvgToTexture();if(clS.startPhysicsInteraction(iX,iY))this.app.startShapePhysicsLoop(clS);}
+                else if(this.app.currentTool==='select'){if(this.app.selectedShape&&!iCD){const hId=this.app.selectedShape.getHandleAt(iX,iY,this.canvasView.viewTransform.scale);if(hId!==null){this.app.historyManager.saveState();this.aRH={shape:this.app.selectedShape,id:hId};}}
+                    if(!this.aRH){const pS=this.app.selectedShape;this.app.selectShape(clS);if(this.app.selectedShape){this.isDS=true;this.dSO={x:iX-this.app.selectedShape.x,y:iY-this.app.selectedShape.y};if(pS!==this.app.selectedShape||(clS&&!iCD))this.app.historyManager.saveState();}else if(pS&&!clS)this.app.historyManager.saveState();}}
+                else if(this.app.currentTool==='drawRect'||this.app.currentTool==='drawEllipse')this.app.startDrawingShape(iX,iY);
+                else if(this.app.currentTool==='drawPolygon')this.app.addPolygonPoint(iX,iY);
+                if(this.app.toolbarManager){this.app.toolbarManager.updateEditButtonStates();this.app.toolbarManager.updateEffectOverlayControls();}this.app.canvasView.render();this.updateCursor(ev);
+            }
+            handleMouseMove(ev){const{screenX:sX,screenY:sY,x:iX,y:iY}=this._getMousePos(ev);this.app.updateMousePositions(sX,sY,iX,iY);
+                if(this.isP){ev.preventDefault();const dX=sX-this.lPP.x,dY=sY-this.lPP.y;this.canvasView.pan(dX,dY);this.lPP={x:sX,y:sY};}
+                else if(this.isMD){if(this.aRH){ev.preventDefault();this.aRH.shape.resize(this.aRH.id,iX,iY,this.app.originalImage,this.app.meshDensity);this.app.canvasView.render();}
+                else if(this.isDS&&this.app.selectedShape){ev.preventDefault();this.app.selectedShape.x=iX-this.dSO.x;this.app.selectedShape.y=iY-this.dSO.y;this.app.canvasView.render();}
+                else if(this.app.selectedShape&&this.app.selectedShape.activeDeformationPoint){ev.preventDefault();this.app.selectedShape.updatePhysicsInteraction(iX,iY);}
+                else if(this.app.isDrawingShape&&(this.app.currentTool==='drawRect'||this.app.currentTool==='drawEllipse')){ev.preventDefault();this.app.canvasView.render();}}
+                else{if(this.app.currentTool==='drawPolygon'&&this.app.currentDrawingPolygonVertices.length>0)this.app.canvasView.render();}
+                this.updateCursor(ev);
+            }
+            handleMouseUp(ev){this.isMD=false;if(this.isP){if(this.isMMP&&ev.button===1)this.isMMP=false;if(!this.sP&&!this.isMMP)this.isP=false;}
+                if(this.aRH){if(this.aRH.shape.isDeformable)this.aRH.shape.recaptureTexture(this.app.originalImage);this.aRH=null;}
+                if(this.isDS)this.isDS=false;if(this.app.selectedShape&&this.app.selectedShape.activeDeformationPoint)this.app.selectedShape.endPhysicsInteraction(true);
+                if(this.app.isDrawingShape&&(this.app.currentTool==='drawRect'||this.app.currentTool==='drawEllipse')){if(this.app.currentMouseImagePos){const{x:iX,y:iY}=this.app.currentMouseImagePos;this.app.finishDrawingShape(iX,iY);}else{this.app.cancelDrawingShape();}}
+                this.app.canvasView.render();this.updateCursor(ev);if(this.app.toolbarManager)this.app.toolbarManager.updateEditButtonStates();
+            }
+            handleMouseLeave(ev){if(this.isMD){if(this.isP&&!this.sP&&!this.isMMP)this.isP=false;if(this.aRH)this.aRH=null;if(this.isDS)this.isDS=false;if(this.app.selectedShape&&this.app.selectedShape.activeDeformationPoint)this.app.selectedShape.endPhysicsInteraction(true);if(this.app.isDrawingShape)this.app.cancelDrawingShape();}this.app.clearMousePositions();this.isMD=false;this.app.canvasView.render();this.updateCursor(ev);}
+            handleWheel(ev){if(!this.app.originalImage&&this.app.shapes.length===0)return;ev.preventDefault();const{screenX:sX,screenY:sY}=this._getMousePos(ev);if(ev.shiftKey){const pA=ev.deltaY||ev.deltaX;this.canvasView.pan(-pA*0.5,0);}else{const zI=0.1;const zF=ev.deltaY<0?(1+zI):(1-zI);this.canvasView.zoom(zF,sX,sY);}this.updateCursor(ev);}
+            handleKeyDown(ev){const aE=document.activeElement,iIF=['INPUT','TEXTAREA','SELECT'].includes(aE.tagName);this.app.ctrlCmdActive=ev.ctrlKey||ev.metaKey;if(iIF&&!['Escape','Enter'].includes(ev.key))return;
+                if(this.app.ctrlCmdActive){switch(ev.key.toLowerCase()){case'z':ev.preventDefault();this.app.historyManager.undo();break;case'y':ev.preventDefault();this.app.historyManager.redo();break;case'x':ev.preventDefault();if(this.app.selectedShape)this.app.clipboardManager.cut();break;case'c':ev.preventDefault();if(this.app.selectedShape)this.app.clipboardManager.copy();break;case'v':ev.preventDefault();this.app.clipboardManager.paste();break;}}
+                else if(ev.key===' '||ev.code==='Space'){if(!iIF&&!this.app.isDrawingShape&&!this.aRH&&!this.isDS&&!(this.app.selectedShape&&this.app.selectedShape.activeDeformationPoint)&&!this.isP){ev.preventDefault();this.sP=true;this.isP=true;if(this.app.currentMouseCanvasPos)this.lPP={x:this.app.currentMouseCanvasPos.x,y:this.app.currentMouseCanvasPos.y};}}
+                else if(ev.key==='Escape'){ev.preventDefault();if(this.app.currentTool==='drawPolygon'&&this.app.currentDrawingPolygonVertices.length>0)this.app.cancelDrawingPolygon();else if(this.app.selectedShape&&this.app.selectedShape.activeDeformationPoint){this.app.selectedShape.resetMeshPoints();this.app.selectedShape.endPhysicsInteraction(false);this.app.stopShapePhysicsLoop(this.app.selectedShape);}else if(this.app.isDrawingShape)this.app.cancelDrawingShape();else if(this.app.selectedShape)this.app.selectShape(null);if(this.app.currentTool==='deformMode')this.app.setTool('select');this.dom.hideModal();}
+                else if(ev.key==='Enter'){if(this.app.currentTool==='drawPolygon'&&this.app.currentDrawingPolygonVertices.length>0){ev.preventDefault();this.app.finishDrawingPolygon();}}
+                else if(ev.key==='Delete'||ev.key==='Backspace'){if(this.app.selectedShape&&!iIF){ev.preventDefault();this.app.deleteSelectedShape();}}
+                this.app.canvasView.render();this.updateCursor(ev);
+            }
+            handleKeyUp(ev){if(ev.key===' '||ev.code==='Space'){this.sP=false;if(this.isP&&!this.isMMP)this.isP=false;}if(!ev.ctrlKey&&!ev.metaKey)this.app.ctrlCmdActive=false;this.updateCursor(ev);}
+        }
+
+        class DeformableShapesApp {
+            constructor(){this.dom=new DomHelper(['imageLoader','btnReset','toolSelect','toolDeformMode','toolDrawRect','toolDrawEllipse','toolDrawPolygon','toolGenerateEffect','btnClearShapes','btnDeleteSelected','btnUndo','btnRedo','btnCut','btnCopy','btnPaste','materialPreset','btnToggleAdvanced','advancedSettingsContainer','stiffness','stiffnessValue','adjacentStiffness','adjacentStiffnessValue','damping','dampingValue','timeScale','timeScaleValue','meshDensity','meshDensityValue','alertModal','alertModalText','alertModalClose','imageCanvas','toggleLeftToolbar','toggleRightToolbar','leftToolbarContainer','rightToolbarContainer','effectControlsContainer','effectOpacity','effectOpacityValue','btnRemoveEffect']);this.originalImage=null;this.shapes=[];this.selectedShape=null;this.currentTool='select';this.isDrawingShape=false;this.currentDrawingPolygonVertices=[];this.shapeDrawStartPos=null;this.currentMouseCanvasPos=null;this.currentMouseImagePos=null;this.ctrlCmdActive=false;this.simulationTimeScale=1.0;this.meshDensity=10;this.canvasView=new CanvasView(this);this.historyManager=new HistoryManager(this);this.clipboardManager=new ClipboardManager(this);this.toolbarManager=new ToolbarManager(this,this.dom);this.inputHandler=new InputHandler(this,this.canvasView,this.dom);this.activePhysicsShapes=new Set();this.globalPhysicsLoopId=null;this.lastPhysicsTimestamp=performance.now();this.init();}
+            init(){Shape.setNextId(0);if(this.toolbarManager&&typeof this.toolbarManager.applyMaterialPreset==='function')this.toolbarManager.applyMaterialPreset();const tSE=this.dom.get('timeScale'),tsVE=this.dom.get('timeScaleValue');if(tSE&&tsVE){this.simulationTimeScale=parseFloat(tSE.value);tsVE.textContent=this.simulationTimeScale.toFixed(2);}const mDE=this.dom.get('meshDensity'),mdVE=this.dom.get('meshDensityValue');if(mDE&&mdVE){this.meshDensity=parseInt(mDE.value);mdVE.textContent=this.meshDensity;}if(!this.originalImage&&this.canvasView)this.canvasView.drawPlaceholder();if(this.toolbarManager)this.toolbarManager.updateEditButtonStates();this.startGlobalPhysicsLoop();}
+            updateMousePositions(cX,cY,iX,iY){this.currentMouseCanvasPos={x:cX,y:cY};this.currentMouseImagePos={x:iX,y:iY};}
+            clearMousePositions(){this.currentMouseCanvasPos=null;this.currentMouseImagePos=null;}
+            loadImage(ev){const F=ev.target.files[0];if(!F)return;const R=new FileReader();R.onload=e=>{this.originalImage=new Image();this.originalImage.onload=()=>{this.resetApplicationLogic(false);if(this.canvasView)this.canvasView.fitImageToView(this.originalImage);if(this.inputHandler)this.inputHandler.updateCursor();this.shapes.forEach(s=>{s.app=this;if(s.isDeformable||s.type==='svg_procedural')s.initializeDeformation(this.originalImage,s.initialMeshDensity,s.physicsProps);});if(this.canvasView)this.canvasView.render();};this.originalImage.onerror=()=>{this.dom.showModal("Error loading image.");this.originalImage=null;if(this.canvasView)this.canvasView.drawPlaceholder();};this.originalImage.src=e.target.result;};R.readAsDataURL(F);}
+            resetApplication(){this.resetApplicationLogic(true);const iL=this.dom.get('imageLoader');if(iL)iL.value='';if(this.canvasView)this.canvasView.drawPlaceholder();}
+            resetApplicationLogic(cI=true){this.stopAllPhysicsLoops();if(cI)this.originalImage=null;this.shapes.forEach(s=>s.stopPhysicsSimulation());this.shapes=[];Shape.setNextId(0);this.selectedShape=null;this.isDrawingShape=false;this.currentDrawingPolygonVertices=[];this.shapeDrawStartPos=null;if(this.historyManager)this.historyManager.clear();if(this.clipboardManager)this.clipboardManager.clipboardContent=null;if(this.originalImage&&!cI&&this.canvasView)this.canvasView.fitImageToView(this.originalImage);else if(this.canvasView)this.canvasView.resetView();this.setTool('select');if(this.toolbarManager){this.toolbarManager.applyMaterialPreset();this.toolbarManager.updateEditButtonStates();this.toolbarManager.updateEffectOverlayControls();}if(this.canvasView)this.canvasView.render();}
+            setTool(tId){if(this.currentTool==='drawPolygon'&&this.currentDrawingPolygonVertices.length>0&&tId!=='drawPolygon')this.cancelDrawingPolygon();if(this.isDrawingShape&&tId!=='drawRect'&&tId!=='drawEllipse')this.cancelDrawingShape();this.currentTool=tId;this.isDrawingShape=false;this.shapeDrawStartPos=null;if(tId==='deformMode'&&this.selectedShape&&this.selectedShape.isDeformable)this.selectedShape.recaptureTexture(this.originalImage);if(this.selectedShape&&this.selectedShape.activeDeformationPoint&&tId!=='deformMode'&&tId!=='select')this.selectedShape.endPhysicsInteraction(true);if(this.toolbarManager)this.toolbarManager.updateToolButtons();if(this.inputHandler)this.inputHandler.updateCursor();if(this.canvasView)this.canvasView.render();}
+            selectShape(sTS){if(this.selectedShape&&this.selectedShape!==sTS){this.selectedShape.isSelected=false;if(this.selectedShape.activeDeformationPoint)this.selectedShape.endPhysicsInteraction(true);}this.selectedShape=sTS;if(this.selectedShape){this.selectedShape.isSelected=true;const cMA=this.inputHandler?this.inputHandler.ctrlCmdActive:this.ctrlCmdActive;if((this.currentTool==='deformMode'||(cMA&&this.currentTool==='select'))&&this.selectedShape.isDeformable)this.selectedShape.recaptureTexture(this.originalImage);if(this.selectedShape.type==='svg_procedural'&&this.selectedShape.svgImageLoading===false&&(!this.selectedShape.svgImage||!this.selectedShape.svgImage.complete||this.selectedShape.svgImage.naturalWidth===0))this.selectedShape._rasterizeSvgToTexture();}if(this.toolbarManager){this.toolbarManager.updateEditButtonStates();this.toolbarManager.updateEffectOverlayControls();}if(this.canvasView)this.canvasView.render();}
+            applyCurrentMaterialToShapes(){if(!this.toolbarManager)return;const cPP=this.toolbarManager.getCurrentPhysicsProperties();this.shapes.forEach(s=>{if(s.isDeformable)s.physicsProps=deepClone(cPP);});if(this.selectedShape&&this.selectedShape.isDeformable)this.selectedShape.physicsProps=deepClone(cPP);}
+            startDrawingShape(iX,iY){if(this.currentTool==='generateEffect')return;this.isDrawingShape=true;this.shapeDrawStartPos={x:iX,y:iY};this.selectShape(null);if(this.canvasView)this.canvasView.render();}
+            finishDrawingShape(iX,iY){if(!this.isDrawingShape||!this.shapeDrawStartPos||(this.currentTool!=='drawRect'&&this.currentTool!=='drawEllipse'))return;const W=Math.abs(this.shapeDrawStartPos.x-iX),H=Math.abs(this.shapeDrawStartPos.y-iY);const X=Math.min(this.shapeDrawStartPos.x,iX),Y=Math.min(this.shapeDrawStartPos.y,iY);if(W<this.meshDensity||H<this.meshDensity){this.dom.showModal(`Shape too small (min ${this.meshDensity}x${this.meshDensity}px).`);this.cancelDrawingShape();return;}if(this.historyManager)this.historyManager.saveState();const sT=this.currentTool.replace('draw','').toLowerCase();const nS=new Shape(sT,X,Y,W,H,this.meshDensity,this.toolbarManager.getCurrentPhysicsProperties());nS.app=this;if(this.originalImage)nS.initializeDeformation(this.originalImage);this.shapes.push(nS);this.selectShape(nS);this.isDrawingShape=false;this.shapeDrawStartPos=null;if(this.canvasView)this.canvasView.render();}
+            cancelDrawingShape(){this.isDrawingShape=false;this.shapeDrawStartPos=null;if(this.canvasView)this.canvasView.render();}
+            addPolygonPoint(iX,iY){if(this.currentTool!=='drawPolygon')return;if(this.currentDrawingPolygonVertices.length===0&&this.historyManager)this.historyManager.saveState();this.currentDrawingPolygonVertices.push({x:iX,y:iY});if(this.canvasView)this.canvasView.render();if(this.inputHandler)this.inputHandler.updateCursor();}
+            finishDrawingPolygon(){if(this.currentTool!=='drawPolygon'||this.currentDrawingPolygonVertices.length<3){this.cancelDrawingPolygon();if(this.currentDrawingPolygonVertices.length>0&&this.currentDrawingPolygonVertices.length<3)this.dom.showModal("Polygon needs at least 3 points.");return;}let mX=Infinity,mAX=-Infinity,mY=Infinity,mAY=-Infinity;this.currentDrawingPolygonVertices.forEach(v=>{mX=Math.min(mX,v.x);mAX=Math.max(mAX,v.x);mY=Math.min(mY,v.y);mAY=Math.max(mAY,v.y);});const sX=mX,sY=mY,sW=mAX-mX,sH=mAY-mY;if(sW<this.meshDensity||sH<this.meshDensity){this.dom.showModal(`Polygon bounding box too small (min ${this.meshDensity}x${this.meshDensity}px).`);this.cancelDrawingPolygon();return;}if(this.historyManager)this.historyManager.saveState();const nP=new Shape('polygon',sX,sY,sW,sH,this.meshDensity,this.toolbarManager.getCurrentPhysicsProperties());nP.app=this;nP.vertices=this.currentDrawingPolygonVertices.map(v=>({x:v.x-sX,y:v.y-sY}));if(this.originalImage)nP.initializeDeformation(this.originalImage);this.shapes.push(nP);this.selectShape(nP);this.currentDrawingPolygonVertices=[];if(this.canvasView)this.canvasView.render();}
+            cancelDrawingPolygon(){this.currentDrawingPolygonVertices=[];if(this.canvasView)this.canvasView.render();if(this.inputHandler)this.inputHandler.updateCursor();}
+            generateProceduralEffect(){if(!this.historyManager)return;this.historyManager.saveState();const eO=0.7,eDW=100,eDH=100;const eSD=`<svg width="${eDW}" height="${eDH}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gradEffect${Shape.nextId}" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:rgba(0,200,255,0.7);stop-opacity:1"/><stop offset="100%" style="stop-color:rgba(0,50,150,0.4);stop-opacity:1"/></radialGradient></defs><rect width="100" height="100" fill="url(#gradEffect${Shape.nextId})"/><circle cx="50" cy="25" r="15" fill="rgba(255,255,0,0.6)"/></svg>`;
+                if(this.selectedShape){this.selectedShape.applyEffectOverlay(eSD,eO,eDW,eDH);if(this.toolbarManager)this.toolbarManager.updateEffectOverlayControls();}
+                else{let dX=0,dY=0;const cV=this.canvasView,cW=cV&&cV.canvas?cV.canvas.width:800,cH=cV&&cV.canvas?cV.canvas.height:600,sc=cV&&cV.viewTransform?cV.viewTransform.scale:1;if(this.currentMouseImagePos){dX=this.currentMouseImagePos.x-eDW/2;dY=this.currentMouseImagePos.y-eDH/2;}else if(this.originalImage){dX=this.originalImage.width/2-eDW/2;dY=this.originalImage.height/2-eDH/2;}else{dX=(cW/sc)/2-eDW/2-(this.viewTransform?this.viewTransform.x/sc:0);dY=(cH/sc)/2-eDH/2-(this.viewTransform?this.viewTransform.y/sc:0);}const pS=eSD;const nES=new Shape('svg_procedural',dX,dY,eDW,eDH,this.meshDensity,this.toolbarManager.getCurrentPhysicsProperties(),pS);nES.app=this;nES.initializeDeformation(null);this.shapes.push(nES);this.selectShape(nES);}
+                if(this.canvasView)this.canvasView.render();
+            }
+            clearAllShapes(){if(this.shapes.length>0&&this.historyManager)this.historyManager.saveState();this.shapes.forEach(s=>s.stopPhysicsSimulation());this.shapes=[];Shape.setNextId(0);this.selectShape(null);this.activePhysicsShapes.clear();if(this.canvasView)this.canvasView.render();if(this.toolbarManager)this.toolbarManager.updateEditButtonStates();}
+            deleteSelectedShape(sTH=true){if(!this.selectedShape)return;if(sTH&&this.historyManager)this.historyManager.saveState();this.selectedShape.stopPhysicsSimulation();this.activePhysicsShapes.delete(this.selectedShape);this.shapes=this.shapes.filter(s=>s.id!==this.selectedShape.id);this.selectShape(null);if(this.canvasView)this.canvasView.render();if(this.toolbarManager)this.toolbarManager.updateEditButtonStates();}
+            startShapePhysicsLoop(s){if(s&&s.isDeformable&&(s.activeDeformationPoint||s.isSettling)){this.activePhysicsShapes.add(s);if(!this.globalPhysicsLoopId){this.lastPhysicsTimestamp=performance.now();this.globalPhysicsLoopId=requestAnimationFrame(t=>this.runGlobalPhysicsStep(t));}}}
+            stopShapePhysicsLoop(s){if(s)this.activePhysicsShapes.delete(s);}
+            stopAllPhysicsLoops(){this.shapes.forEach(s=>s.stopPhysicsSimulation());this.activePhysicsShapes.clear();if(this.globalPhysicsLoopId){cancelAnimationFrame(this.globalPhysicsLoopId);this.globalPhysicsLoopId=null;}}
+            startGlobalPhysicsLoop(){if(this.globalPhysicsLoopId)return;this.lastPhysicsTimestamp=performance.now();this.globalPhysicsLoopId=requestAnimationFrame(t=>this.runGlobalPhysicsStep(t));}
+            runGlobalPhysicsStep(cT){const dT=(cT-this.lastPhysicsTimestamp)/1000;this.lastPhysicsTimestamp=cT;let nR=false;const sTR=[];this.activePhysicsShapes.forEach(s=>{let sM=false;if(s.activeDeformationPoint)sM=s.runPhysicsSimulationStep(dT,this.simulationTimeScale);else if(s.isSettling){sM=s.runPhysicsSimulationStep(dT,this.simulationTimeScale);if(!sM||s.isCompletelySettled()){s.resetMeshPoints();s.isSettling=false;sTR.push(s);}}else sTR.push(s);if(sM)nR=true;});
+                sTR.forEach(s=>this.activePhysicsShapes.delete(s));if(nR&&this.canvasView)this.canvasView.render();
+                if(this.activePhysicsShapes.size>0)this.globalPhysicsLoopId=requestAnimationFrame(t=>this.runGlobalPhysicsStep(t));
+                else{this.globalPhysicsLoopId=null;if((nR||sTR.length>0)&&this.canvasView)this.canvasView.render();}
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const app = new DeformableShapesApp(); window.app = app;
+                window.addEventListener('resize', () => { if (app && app.canvasView) app.canvasView.resizeCanvas(); });
+            } catch (e) {
+                console.error("Error initializing DeformableShapesApp:", e);
+                document.body.innerHTML = `<div style="color:red;padding:20px;font-family:sans-serif;background-color:#222;"><h1>App Init Error</h1><p>${e.message}</p><pre>${e.stack}</pre></div>`;
+            }
+        });
+    </script>
+</body>
+</html>
